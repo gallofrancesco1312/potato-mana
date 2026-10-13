@@ -8,7 +8,11 @@ import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
 import { jobs } from "./schema.ts";
 
-export type JobDef = { name: string; cron: string; run: () => Promise<string | undefined> };
+export type JobDef = {
+  name: string;
+  cron: string;
+  run: (progress: (msg: string) => void) => Promise<string | undefined>;
+};
 
 export const backupJob = (
   sqlite: Database.Database,
@@ -76,7 +80,10 @@ export function createScheduler(
     let status: "ok" | "error" = "ok";
     let detail: string | null = null;
     try {
-      detail = (await def.run()) ?? null;
+      detail =
+        (await def.run((msg) => {
+          db.update(jobs).set({ detail: msg }).where(eq(jobs.id, row.id)).run();
+        })) ?? null;
     } catch (e) {
       status = "error";
       detail = e instanceof Error ? e.message : String(e);

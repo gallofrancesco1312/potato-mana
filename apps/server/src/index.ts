@@ -17,3 +17,6 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
 }
 
 await app.listen({ port: cfg.PORT, host: "0.0.0.0" });
+
+// first start: fill the card database in the background
+if (!sqlite.prepare("SELECT 1 FROM cards LIMIT 1").get()) void app.scheduler.run("scryfall-ingest");

@@ -1,0 +1,1 @@
+ALTER TABLE `cards` ADD `latest` integer DEFAULT 0 NOT NULL;

@@ -17,8 +17,11 @@ import {
   hashPassword,
   verifyPassword,
 } from "./auth.ts";
+import { registerCards } from "./cards.ts";
 import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
+import { registerImages } from "./images.ts";
+import { httpSource, runIngest, type Source } from "./ingest.ts";
 import { backupJob, createScheduler, notifyNtfy } from "./jobs.ts";
 import { registerOidc } from "./oidc.ts";
 import { users } from "./schema.ts";
@@ -26,6 +29,9 @@ import { users } from "./schema.ts";
 declare module "fastify" {
   interface FastifyRequest {
     user: Me | null;
+  }
+  interface FastifyInstance {
+    scheduler: { run(name: string): Promise<unknown> };
   }
 }
 
@@ -35,6 +41,7 @@ export function buildApp(o: {
   sqlite: Database.Database;
   logger?: boolean;
   schedule?: boolean;
+  source?: Source;
 }) {
   const { cfg, db, sqlite } = o;
   const app = Fastify({ logger: o.logger ?? true, bodyLimit: 1_048_576 });
@@ -42,12 +49,26 @@ export function buildApp(o: {
 
   const scheduler = createScheduler(
     db,
-    [backupJob(sqlite, `${cfg.DATA_DIR}/backups`, cfg.BACKUP_KEEP_DAYS, cfg.BACKUP_CRON)],
+    [
+      backupJob(sqlite, `${cfg.DATA_DIR}/backups`, cfg.BACKUP_KEEP_DAYS, cfg.BACKUP_CRON),
+      {
+        name: "scryfall-ingest",
+        cron: cfg.INGEST_CRON,
+        run: (progress) =>
+          runIngest({
+            sqlite,
+            src: o.source ?? httpSource(cfg.SCRYFALL_USER_AGENT),
+            dir: `${cfg.DATA_DIR}/tmp`,
+            progress,
+          }),
+      },
+    ],
     (name, err) => notifyNtfy(cfg, `Job failed: ${name}`, err),
     { error: (obj, msg) => app.log.error(obj, msg) },
     o.schedule ?? true,
   );
   app.addHook("onClose", async () => scheduler.stop());
+  app.decorate("scheduler", scheduler);
 
   app.register(helmet, {
     hsts: false, // TLS is terminated by Traefik
@@ -109,6 +130,7 @@ export function buildApp(o: {
   app.register(
     async (api) => {
       const oidc = registerOidc(api, { cfg, db, startSession });
+      registerCards(api, { sqlite, needUser });
       api.get("/auth/state", async () => ({ setupNeeded: userCount() === 0, oidc }));
 
       api.post(
@@ -200,6 +222,13 @@ export function buildApp(o: {
     },
     { prefix: "/api/v1" },
   );
+
+  registerImages(app, {
+    sqlite,
+    dir: `${cfg.DATA_DIR}/img`,
+    userAgent: cfg.SCRYFALL_USER_AGENT,
+    needUser,
+  });
 
   const webDir = cfg.WEB_DIR ?? fileURLToPath(new URL("../../web/dist", import.meta.url));
   if (existsSync(webDir)) {

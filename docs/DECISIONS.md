@@ -15,4 +15,17 @@
 
 ## External API facts verified
 
-None yet. Scryfall/MTGJSON docs are fetched and recorded here at the start of M1.
+### Scryfall (fetched 2026-10-13 from scryfall.com/docs and api.scryfall.com)
+
+- Docs pages return 403 to the WebFetch tool; plain `curl` with a descriptive `User-Agent` works.
+- **Bulk files are gzipped JSONL, not a JSON array** (`jsonl.gz`, one card per line). `GET /bulk-data` objects expose `type`, `updated_at`, `jsonl_download_uri`, `compressed_size` (no `download_uri`/`size`). Types present: `oracle_cards`, `unique_artwork`, `default_cards` (~79 MB gz, ~118k cards), `all_cards` (~396 MB gz), `rulings`, `art_tags`, `oracle_tags`.
+- Files are regenerated every 12-24 h; prices are stale after 24 h; gameplay data changes rarely.
+- Required on every `api.scryfall.com` request: accurate `User-Agent` (app name/version, not the HTTP library default) and an `Accept` header (`*/*` is fine).
+- Rate limits: `/cards/search|named|random|collection` 2/s; `/cards/manifest` 10/min; everything else 10/s. `*.scryfall.io` has none. A 429 limits access for 30 s; ignoring it risks a ban.
+- Cache locally at least 24 h. Card object has `game_changer` (nullable bool), `finishes`, `prices` (usd/eur/tix keys), `card_faces`, `illustration_id`, `tcgplayer_id`, `cardmarket_id`, `mtgo_id`, `purchase_uris`.
+- Search syntax semantics checked with live counts: `c:wu` == `c>=wu` (720), `id:wu` == `id<=wu` (13457, commander "within" semantics), `id=wu` exact (512).
+
+### Implementation choices from this
+- `oracle_cards` bulk is **not** downloaded: oracle rows are derived from `default_cards` (same gameplay data on every printing), saving a 24 MB download and a second source of truth.
+- `all_cards` / Italian printed names: answer was "no"; not implemented. Add as opt-in later.
+- Ingest is idempotent rather than byte-resumable: re-running re-downloads and re-upserts.

@@ -1,0 +1,1 @@
+ALTER TABLE `cards` ADD `finish_mask` integer DEFAULT 0 NOT NULL;
