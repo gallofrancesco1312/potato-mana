@@ -144,6 +144,25 @@ describe("oidc", () => {
     expect(cb.statusCode).toBe(400);
   });
 
+  it("closes the open setup form once SSO is configured", async () => {
+    claims = { preferred_username: "ciccio", groups: ["admins"] };
+    const { app } = make(env());
+    expect((await app.inject("/api/v1/auth/state")).json()).toMatchObject({
+      setupNeeded: false,
+      oidc: true,
+    });
+    const r = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/setup",
+      payload: { username: "intruder", password: "correct-horse-battery" },
+    });
+    expect(r.statusCode).toBe(403);
+    // the first SSO login becomes the admin
+    const cb = await sso(app);
+    const me = await app.inject({ url: "/api/v1/me", headers: { cookie: sid(cb) } });
+    expect(me.json()).toMatchObject({ username: "ciccio", role: "admin" });
+  });
+
   it("is off without configuration", async () => {
     const { app } = make();
     expect((await app.inject("/api/v1/auth/state")).json()).toMatchObject({ oidc: false });

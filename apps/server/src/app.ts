@@ -172,12 +172,16 @@ export function buildApp(o: {
       registerCards(api, { sqlite, needUser });
       registerCollection(api, { sqlite, cfg, needUser });
       registerPrices(api, { sqlite, needUser });
-      api.get("/auth/state", async () => ({ setupNeeded: userCount() === 0, oidc }));
+      // With SSO configured the first user is whoever signs in through the identity provider;
+      // an open "create admin" form on the LAN would let anyone win that race.
+      api.get("/auth/state", async () => ({ setupNeeded: !oidc && userCount() === 0, oidc }));
 
       api.post(
         "/auth/setup",
         { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
         async (req, reply) => {
+          if (oidc)
+            return reply.code(403).send({ error: "setup is disabled when SSO is configured" });
           const body = parse(createUserSchema, req.body, reply);
           if (!body) return;
           const passwordHash = await hashPassword(body.password);

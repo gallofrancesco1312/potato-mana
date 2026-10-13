@@ -72,7 +72,7 @@ function Login({ setup, oidc }: { setup: boolean; oidc: boolean }) {
           autoComplete={setup ? "new-password" : "current-password"}
         />
       </label>
-      {oidc && !setup && (
+      {oidc && (
         <a className={`${button} text-center`} href="/api/v1/auth/oidc/login">
           {t("login.sso")}
         </a>
