@@ -1,7 +1,8 @@
 import { existsSync, mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { loadConfig } from "../src/config.ts";
 import { openDb } from "../src/db.ts";
@@ -93,34 +94,60 @@ describe("local auth", () => {
   });
 });
 
-describe("forward auth", () => {
-  const headers = {
-    "remote-user": "roberta",
-    "remote-email": "r@example.com",
-    "remote-groups": "users",
-  };
+describe("oidc", () => {
+  let idp: OAuth2Server;
+  let claims: Record<string, unknown>;
+  beforeAll(async () => {
+    idp = new OAuth2Server();
+    await idp.issuer.keys.generate("RS256");
+    await idp.start(0, "localhost");
+    idp.service.on("beforeUserinfo", (res: { body: unknown }) => {
+      res.body = { sub: "johndoe", ...claims };
+    });
+  });
+  afterAll(() => idp.stop());
 
-  it("trusts headers only from trusted proxies", async () => {
-    const { app } = make({ FORWARD_AUTH: "true", TRUSTED_PROXIES: "172.18.0.0/16" });
-    const trusted = await app.inject({ url: "/api/v1/me", headers, remoteAddress: "172.18.0.5" });
-    expect(trusted.json()).toMatchObject({ username: "roberta", role: "user" });
-    const spoof = await app.inject({ url: "/api/v1/me", headers, remoteAddress: "192.168.1.50" });
-    expect(spoof.statusCode).toBe(401);
+  async function sso(app: ReturnType<typeof make>["app"]) {
+    const login = await app.inject("/api/v1/auth/oidc/login");
+    expect(login.statusCode).toBe(302);
+    const state = login.cookies.find((c) => c.name === "oidc_state")?.value;
+    const authz = await fetch(String(login.headers.location), { redirect: "manual" });
+    const back = new URL(String(authz.headers.get("location")));
+    return app.inject({
+      url: back.pathname + back.search,
+      headers: { cookie: `oidc_state=${state}` },
+    });
+  }
+  const env = () => ({
+    OIDC_ISSUER: idp.issuer.url as string,
+    OIDC_CLIENT_ID: "c",
+    OIDC_CLIENT_SECRET: "s",
   });
 
-  it("maps admin group to role, ignores headers when disabled", async () => {
-    const on = make({ FORWARD_AUTH: "true", TRUSTED_PROXIES: "10.0.0.1" });
-    const res = await on.app.inject({
-      url: "/api/v1/me",
-      headers: { ...headers, "remote-user": "ciccio", "remote-groups": "admins,dev" },
-      remoteAddress: "10.0.0.1",
-    });
-    expect(res.json()).toMatchObject({ username: "ciccio", role: "admin" });
+  it("logs in, provisions user, maps admin group", async () => {
+    claims = { preferred_username: "ciccio", email: "c@example.com", groups: ["admins", "dev"] };
+    const { app } = make(env());
+    expect((await app.inject("/api/v1/auth/state")).json()).toMatchObject({ oidc: true });
+    const cb = await sso(app);
+    expect(cb.statusCode).toBe(302);
+    const me = await app.inject({ url: "/api/v1/me", headers: { cookie: sid(cb) } });
+    expect(me.json()).toMatchObject({ username: "ciccio", email: "c@example.com", role: "admin" });
+  });
 
-    const off = make({ TRUSTED_PROXIES: "10.0.0.1" });
-    expect(
-      (await off.app.inject({ url: "/api/v1/me", headers, remoteAddress: "10.0.0.1" })).statusCode,
-    ).toBe(401);
+  it("rejects a callback without the browser-bound state cookie", async () => {
+    claims = { preferred_username: "roberta", groups: [] };
+    const { app } = make(env());
+    const login = await app.inject("/api/v1/auth/oidc/login");
+    const authz = await fetch(String(login.headers.location), { redirect: "manual" });
+    const back = new URL(String(authz.headers.get("location")));
+    const cb = await app.inject({ url: back.pathname + back.search });
+    expect(cb.statusCode).toBe(400);
+  });
+
+  it("is off without configuration", async () => {
+    const { app } = make();
+    expect((await app.inject("/api/v1/auth/state")).json()).toMatchObject({ oidc: false });
+    expect((await app.inject("/api/v1/auth/oidc/login")).statusCode).toBe(404);
   });
 });
 

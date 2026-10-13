@@ -6,10 +6,13 @@ const schema = z.object({
   WEB_DIR: z.string().optional(),
   COOKIE_SECURE: z.stringbool().default(true),
   SESSION_DAYS: z.coerce.number().int().positive().default(30),
-  /** Trust Remote-User/Email/Groups only from TRUSTED_PROXIES (Authelia via Traefik). */
-  FORWARD_AUTH: z.stringbool().default(false),
-  /** Comma separated IPs or CIDRs of the reverse proxy (socket peer address). */
-  TRUSTED_PROXIES: z.string().default(""),
+  /** External origin, used to build the OIDC redirect URI. */
+  PUBLIC_URL: z.string().url().default("http://localhost:3000"),
+  /** OIDC login (Authelia). Enabled when issuer, client id and secret are all set. */
+  OIDC_ISSUER: z.string().url().optional(),
+  OIDC_CLIENT_ID: z.string().optional(),
+  OIDC_CLIENT_SECRET: z.string().optional(),
+  /** Members of this OIDC group become admins. */
   ADMIN_GROUP: z.string().default("admins"),
   BACKUP_CRON: z.string().default("30 2 * * *"),
   BACKUP_KEEP_DAYS: z.coerce.number().int().positive().default(14),

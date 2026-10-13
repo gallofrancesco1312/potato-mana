@@ -20,6 +20,7 @@ import {
 import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
 import { backupJob, createScheduler, notifyNtfy } from "./jobs.ts";
+import { registerOidc } from "./oidc.ts";
 import { users } from "./schema.ts";
 
 declare module "fastify" {
@@ -37,7 +38,7 @@ export function buildApp(o: {
 }) {
   const { cfg, db, sqlite } = o;
   const app = Fastify({ logger: o.logger ?? true, bodyLimit: 1_048_576 });
-  const resolveUser = authResolver(db, cfg);
+  const resolveUser = authResolver(db);
 
   const scheduler = createScheduler(
     db,
@@ -92,6 +93,8 @@ export function buildApp(o: {
       path: "/",
       maxAge: cfg.SESSION_DAYS * 86_400,
     });
+  const startSession = (reply: FastifyReply, userId: number) =>
+    setCookie(reply, createSession(db, userId, cfg.SESSION_DAYS));
   const userCount = () => db.select({ n: count() }).from(users).get()?.n ?? 0;
 
   app.get("/healthz", async (_req, reply) => {
@@ -105,10 +108,8 @@ export function buildApp(o: {
 
   app.register(
     async (api) => {
-      api.get("/auth/state", async () => ({
-        setupNeeded: userCount() === 0,
-        forwardAuth: cfg.FORWARD_AUTH,
-      }));
+      const oidc = registerOidc(api, { cfg, db, startSession });
+      api.get("/auth/state", async () => ({ setupNeeded: userCount() === 0, oidc }));
 
       api.post(
         "/auth/setup",

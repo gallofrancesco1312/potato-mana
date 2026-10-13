@@ -5,7 +5,7 @@
 - **Name:** repo and `APP_NAME` are `potato-mana` (brief working name was Cardvault). One constant in `packages/shared`.
 - **Hostname:** `mana-potato.home.potato` (user choice), configurable via `APP_HOST`.
 - **Deployment:** brief assumes Komodo; the homelab uses Dockhand + deploy webhook + Forgejo registry. `compose.yaml` is plain Compose and works with either. Image name `forgejo.home.potato/ciccio/potato-mana`.
-- **Auth:** Authelia forward-auth (headers) as chosen, local accounts kept for first run, dev and fallback. Homelab apps with their own login normally use OIDC; header mode was taken because the brief specifies it and avoids a client registration. Trade-off: Authelia's 5 min inactivity timeout applies. Switch to OIDC if that annoys.
+- **Auth:** Authelia OIDC (user choice, same pattern as cooktrace/potato-split), authorization code + PKCE via `openid-client`, claims from the userinfo endpoint. Local accounts kept for first run and fallback. The forward-auth header mode from the brief was implemented first and removed: it would add Authelia's 5 min inactivity timeout to the PWA and the header trust needs careful router config. Re-add only if wanted.
 - **No OpenAPI yet:** `/api/docs` and Zod-to-OpenAPI generation deferred until there are enough routes to justify it (M1).
 - **No service worker yet:** PWA manifest/offline shell deferred to M1 with the first real data views.
 - **No Playwright yet:** first e2e flow is CSV import (M2). Server integration tests use `fastify.inject`.

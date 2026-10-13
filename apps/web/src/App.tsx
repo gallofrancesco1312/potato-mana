@@ -33,7 +33,7 @@ function useTheme() {
   return [dark, () => setDark((d) => !d)] as const;
 }
 
-function Login({ setup }: { setup: boolean }) {
+function Login({ setup, oidc }: { setup: boolean; oidc: boolean }) {
   const { t } = useI18n();
   const qc = useQueryClient();
   const [username, setU] = useState("");
@@ -72,6 +72,11 @@ function Login({ setup }: { setup: boolean }) {
           autoComplete={setup ? "new-password" : "current-password"}
         />
       </label>
+      {oidc && !setup && (
+        <a className={`${button} text-center`} href="/api/v1/auth/oidc/login">
+          {t("login.sso")}
+        </a>
+      )}
       {m.isError && (
         <p role="alert" className="text-red-700 dark:text-red-400">
           {t("login.error")}
@@ -91,7 +96,7 @@ export function Layout() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => api<Me>("/me") });
   const state = useQuery({
     queryKey: ["auth-state"],
-    queryFn: () => api<{ setupNeeded: boolean }>("/auth/state"),
+    queryFn: () => api<{ setupNeeded: boolean; oidc: boolean }>("/auth/state"),
     enabled: me.isError,
   });
   const logout = useMutation({
@@ -101,7 +106,8 @@ export function Layout() {
 
   let body: React.ReactNode;
   if (me.isPending) body = null;
-  else if (me.isError) body = state.data ? <Login setup={state.data.setupNeeded} /> : null;
+  else if (me.isError)
+    body = state.data ? <Login setup={state.data.setupNeeded} oidc={state.data.oidc} /> : null;
   else body = <Outlet />;
 
   return (

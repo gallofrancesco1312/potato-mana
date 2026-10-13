@@ -5,7 +5,9 @@ export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   email: text("email"),
-  /** null for users provisioned through forward-auth. */
+  /** OIDC subject; set on first SSO login. */
+  oidcSub: text("oidc_sub").unique(),
+  /** null for users provisioned through OIDC. */
   passwordHash: text("password_hash"),
   role: text("role", { enum: ["admin", "user"] })
     .notNull()

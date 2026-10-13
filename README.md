@@ -16,17 +16,32 @@ pnpm install
 pnpm dev
 ```
 
-First visit creates the admin account. More users: `POST /api/v1/admin/users` (admin) or, with forward-auth, they are created on first Authelia login.
+First visit creates the admin account. More users: `POST /api/v1/admin/users` (admin) or they are created on first Authelia login.
 
 Checks: `pnpm lint && pnpm typecheck && pnpm test`.
 
-## Production (Traefik + Authelia)
+## Production (Traefik + Authelia OIDC)
 
-`compose.yaml` expects the external `proxy` network and the `authelia@docker` middleware. Copy `.env.example` to `.env`, set `TRUSTED_PROXIES` to the Traefik address/CIDR on `proxy` (`docker network inspect proxy`), then `docker compose up -d`.
+`compose.yaml` expects the external `proxy` network. The router has no `authelia@docker` middleware: login is OIDC and the app keeps its own 30 day session.
 
-Forward-auth mode (`FORWARD_AUTH=true`): the app trusts `Remote-User`, `Remote-Email`, `Remote-Groups` only when the TCP peer is in `TRUSTED_PROXIES`. The router **must** carry the Authelia middleware, otherwise a client can set those headers through Traefik. Members of `ADMIN_GROUP` are admins; role is re-synced from Authelia on each request.
+1. Register the client in `authelia/configuration.yml` (`identity_providers.oidc.clients`), hash the secret with `authelia crypto hash generate pbkdf2`:
+   ```yaml
+   - client_id: 'mana-potato'
+     client_name: 'potato-mana'
+     client_secret: '<pbkdf2 hash>'
+     public: false
+     authorization_policy: 'one_factor'
+     redirect_uris: ['https://mana-potato.home.potato/api/v1/auth/oidc/callback']
+     scopes: ['openid', 'profile', 'email', 'groups']
+     userinfo_signed_response_alg: 'none'
+     token_endpoint_auth_method: 'client_secret_basic'
+   ```
+2. Copy `.env.example` to `.env`, set the plaintext `OIDC_CLIENT_SECRET`, then `docker compose up -d`.
+3. DNS: add `mana-potato.home.potato` to Pi-hole `dns.hosts`.
 
-Camera access needs HTTPS: the homelab wildcard `*.home.potato` cert is fine once the phone trusts the local CA.
+Any Authelia user who logs in gets an account (Authelia is the gatekeeper); members of `ADMIN_GROUP` are admins, re-synced on every SSO login. A local account with the same username is adopted on first SSO login. Local accounts stay available for first run and as fallback.
+
+Camera access needs HTTPS: the wildcard `*.home.potato` cert is fine once the phone trusts the local CA.
 
 ## Environment
 
@@ -36,9 +51,9 @@ Camera access needs HTTPS: the homelab wildcard `*.home.potato` cert is fine onc
 | `DATA_DIR` | `./data` (`/data` in image) | SQLite file, backups, later image cache |
 | `COOKIE_SECURE` | `true` | `Secure` flag on session cookie (set `false` only for plain-http dev) |
 | `SESSION_DAYS` | `30` | session lifetime |
-| `FORWARD_AUTH` | `false` | enable Authelia header auth |
-| `TRUSTED_PROXIES` | empty | comma list of IPs/CIDRs allowed to send forward-auth headers |
-| `ADMIN_GROUP` | `admins` | Authelia group mapped to admin |
+| `PUBLIC_URL` | `http://localhost:3000` | external origin, builds the OIDC redirect URI |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | empty | enable SSO login when all set |
+| `ADMIN_GROUP` | `admins` | OIDC group mapped to admin |
 | `BACKUP_CRON` | `30 2 * * *` | nightly backup schedule |
 | `BACKUP_KEEP_DAYS` | `14` | backup retention |
 | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | empty | job failure notifications (token optional) |
