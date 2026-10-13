@@ -31,6 +31,15 @@ async function setup(app: ReturnType<typeof make>["app"]) {
   return sid(res);
 }
 
+describe("config", () => {
+  it("treats empty env values as unset", () => {
+    const cfg = loadConfig({ NTFY_URL: "", NTFY_TOPIC: "", OIDC_ISSUER: "", PORT: "" });
+    expect(cfg.NTFY_URL).toBeUndefined();
+    expect(cfg.OIDC_ISSUER).toBeUndefined();
+    expect(cfg.PORT).toBe(3000);
+  });
+});
+
 describe("local auth", () => {
   it("healthz", async () => {
     const { app } = make();

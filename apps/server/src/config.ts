@@ -26,5 +26,6 @@ const schema = z.object({
 
 export type Config = z.infer<typeof schema>;
 
+/** An empty value (`NTFY_URL=` in a .env or `${NTFY_URL:-}` in compose) means "not set", not "invalid". */
 export const loadConfig = (env: Record<string, string | undefined> = process.env): Config =>
-  schema.parse(env);
+  schema.parse(Object.fromEntries(Object.entries(env).filter(([, v]) => v !== "")));
