@@ -34,7 +34,10 @@ export function registerCards(
       currency: q.currency === "usd" ? "usd" : "eur",
     };
     try {
-      return { ...searchCards(sqlite, opts), pricesAsOf: setting("bulk.default_cards") };
+      return {
+        ...searchCards(sqlite, { ...opts, userId: req.user?.id }),
+        pricesAsOf: setting("bulk.default_cards"),
+      };
     } catch (e) {
       if (e instanceof SearchError) return reply.code(400).send({ error: e.message });
       throw e;

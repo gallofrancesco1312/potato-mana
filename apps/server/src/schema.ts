@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -142,4 +142,75 @@ export const rulings = sqliteTable(
     comment: text("comment").notNull(),
   },
   (t) => [index("rulings_oracle_idx").on(t.oracleId)],
+);
+
+/** Binders (owned), lists (tracked) and, from M4, decks. Strictly per user. */
+export const containers = sqliteTable(
+  "containers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["binder", "list", "deck"] }).notNull(),
+    name: text("name").notNull(),
+    parentId: integer("parent_id"),
+    sort: integer("sort").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("containers_user_idx").on(t.userId, t.kind)],
+);
+
+/** One stack: same printing + same properties. References cards.id, never copies card data. */
+export const entries = sqliteTable(
+  "entries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    containerId: integer("container_id")
+      .notNull()
+      .references(() => containers.id, { onDelete: "cascade" }),
+    cardId: text("card_id").notNull(),
+    qty: integer("qty").notNull(),
+    finish: text("finish", { enum: ["nonfoil", "foil", "etched"] })
+      .notNull()
+      .default("nonfoil"),
+    lang: text("lang").notNull().default("en"),
+    condition: text("condition").notNull().default("NM"),
+    purchasePrice: real("purchase_price"),
+    purchaseCurrency: text("purchase_currency"),
+    misprint: integer("misprint").notNull().default(0),
+    altered: integer("altered").notNull().default(0),
+    notes: text("notes"),
+    /** JSON array of strings */
+    tags: text("tags").notNull().default("[]"),
+    /** market price on the day the stack was added, used when purchase_price is empty */
+    addedEur: real("added_eur"),
+    addedUsd: real("added_usd"),
+    addedAt: text("added_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // prefix serves container listings, full key serves the stack-merge lookup on import
+    index("entries_container_card_idx").on(t.containerId, t.cardId),
+    index("entries_user_card_idx").on(t.userId, t.cardId),
+  ],
+);
+
+/** Full per-user snapshot (gzipped JSON) taken before bulk operations and imports. */
+export const restorePoints = sqliteTable(
+  "restore_points",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    containerCount: integer("container_count").notNull(),
+    entryCount: integer("entry_count").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+  },
+  (t) => [index("restore_user_idx").on(t.userId)],
 );

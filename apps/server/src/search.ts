@@ -134,7 +134,7 @@ const FORMAT = /^[a-z]+$/;
 
 export type Compiled = { where: string; params: unknown[]; printing: boolean };
 
-export function compile(node: Node | null): Compiled {
+export function compile(node: Node | null, ctx?: { userId: number }): Compiled {
   const params: unknown[] = [];
   let printing = false;
   const p = (v: unknown) => {
@@ -272,6 +272,11 @@ export function compile(node: Node | null): Compiled {
               : "('legal','restricted')";
         return `json_extract(o.legalities, '$.${fmt}') IN ${want}`;
       }
+      case "in": {
+        if (!ctx) throw new SearchError("in: needs a logged-in user");
+        return `EXISTS (SELECT 1 FROM entries e JOIN containers k ON k.id=e.container_id
+          WHERE e.user_id=${p(ctx.userId)} AND e.card_id=c.id AND lower(k.name)=lower(${p(val)}))`;
+      }
       case "lang":
       case "language":
         return val === "any" ? "1" : `c.lang=lower(${p(val)})`;
@@ -329,6 +334,11 @@ export function compile(node: Node | null): Compiled {
         return "o.layout IN ('transform','modal_dfc','double_faced_token','reversible_card')";
       case "gamechanger":
         return "o.game_changer=1";
+      case "owned": {
+        if (!ctx) throw new SearchError("is:owned needs a logged-in user");
+        return `EXISTS (SELECT 1 FROM entries e JOIN containers k ON k.id=e.container_id
+          WHERE e.user_id=${p(ctx.userId)} AND k.kind<>'list' AND e.card_id=c.id)`;
+      }
       case "token":
         return "o.layout IN ('token','double_faced_token')";
       case "multicolor":
@@ -378,29 +388,80 @@ const EXTRA_LAYOUTS =
 /** Page size cap for totals: counting a 100k-row result just to print "1-60 of N" is wasted work. */
 const TOTAL_CAP = 10_000;
 
-export function searchCards(sqlite: Database.Database, o: SearchOpts) {
-  const { where, params, printing } = compile(parse(o.q ?? ""));
+export type Universe = {
+  prefix: string;
+  from: string;
+  where: string;
+  params: unknown[];
+  windowed: boolean;
+  filtered: boolean;
+  priceExpr: string;
+};
+
+/**
+ * The set of printings a query selects, as SQL pieces usable by search, collector mode and others:
+ * `${prefix} SELECT ... FROM ${from} WHERE ${where}`, with aliases c (cards) and o (oracles).
+ */
+export function universe(o: SearchOpts & { userId?: number }): Universe {
+  const { where, params, printing } = compile(
+    parse(o.q ?? ""),
+    o.userId ? { userId: o.userId } : undefined,
+  );
   const priceExpr =
     (o.currency ?? "eur") === "eur"
       ? "COALESCE(c.eur, c.eur_foil, c.eur_etched)"
       : "COALESCE(c.usd, c.usd_foil, c.usd_etched)";
   const base = [
     "c.superseded=0",
-    o.includeDigital || /\bis:digital\b/i.test(o.q) ? "1" : "c.digital=0",
+    o.includeDigital || /\bis:digital\b/i.test(o.q ?? "") ? "1" : "c.digital=0",
     o.includeExtras ? "1" : `o.layout NOT IN ${EXTRA_LAYOUTS}`,
     where,
   ].join(" AND ");
+  const filtered = where !== "1";
+  // Join order is forced (CROSS JOIN): SQLite cannot estimate bitmask/LIKE selectivity and picks badly.
+  // Oracle-only filters drive from the 35k oracles; printing filters or no filter drive from cards.
+  const from =
+    filtered && !printing
+      ? "oracles o CROSS JOIN cards c ON c.oracle_id=o.oracle_id"
+      : "cards c CROSS JOIN oracles o ON o.oracle_id=c.oracle_id";
+  // Grouping with only oracle-level filters: every printing matches, so the representative is the
+  // precomputed newest printing. Grouping with printing filters needs the newest *matching* one.
+  const useLatest = o.group && !printing && !o.includeDigital;
+  if (!o.group || useLatest) {
+    return {
+      prefix: "",
+      from,
+      where: useLatest ? `${base} AND c.latest=1` : base,
+      params,
+      windowed: false,
+      filtered,
+      priceExpr,
+    };
+  }
+  return {
+    prefix: `WITH m AS MATERIALIZED (SELECT c.id, c.oracle_id AS oid, c.released_at FROM ${from} WHERE ${base}),
+      g AS MATERIALIZED (SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY oid ORDER BY released_at DESC, id) rn FROM m) WHERE rn=1)`,
+    from: "g CROSS JOIN cards c ON c.id=g.id CROSS JOIN oracles o ON o.oracle_id=c.oracle_id",
+    where: "1",
+    params,
+    windowed: true,
+    filtered,
+    priceExpr,
+  };
+}
 
+export function searchCards(sqlite: Database.Database, o: SearchOpts & { userId?: number }) {
+  const u = universe(o);
   const dir = o.dir === "desc" ? "DESC" : "ASC";
   // index order only pays off with no filter: with a selective filter SQLite would walk the whole
   // name index doing row lookups. lower() hides the index so it filters first, then sorts.
-  const filtered = where !== "1";
   const orderBy =
     {
-      name: `${filtered ? "lower(c.name)" : "c.name COLLATE NOCASE"} ${dir}`,
+      name: `${u.filtered ? "lower(c.name)" : "c.name COLLATE NOCASE"} ${dir}`,
       set: `c.set_code ${dir}, c.collector_int ${dir}`,
       released: `c.released_at ${dir}`,
-      price: `${priceExpr} ${dir} NULLS LAST`,
+      price: `${u.priceExpr} ${dir} NULLS LAST`,
       cmc: `o.cmc ${dir}`,
       number: `c.collector_int ${dir}`,
     }[o.sort ?? "name"] + ", c.id";
@@ -408,46 +469,24 @@ export function searchCards(sqlite: Database.Database, o: SearchOpts) {
   const page = Math.max(o.page ?? 1, 1);
   const cols = `c.id, c.oracle_id, c.name, c.set_code, c.set_name, c.collector_number, c.rarity, c.lang,
     c.released_at, c.finishes, c.images, c.usd, c.usd_foil, c.usd_etched, c.eur, c.eur_foil, c.eur_etched,
-    c.tix, ${priceExpr} AS price, o.type_line, o.mana_cost, o.layout`;
-  // Join order is forced (CROSS JOIN): SQLite cannot estimate bitmask/LIKE selectivity and picks badly.
-  // Oracle-only filters drive from the 35k oracles; printing filters or no filter drive from cards.
-  const from =
-    filtered && !printing
-      ? "FROM oracles o CROSS JOIN cards c ON c.oracle_id=o.oracle_id"
-      : "FROM cards c CROSS JOIN oracles o ON o.oracle_id=c.oracle_id";
-
-  // Grouping with only oracle-level filters: every printing matches, so the representative is the
-  // precomputed newest printing. Grouping with printing filters needs the newest *matching* one.
-  const useLatest = o.group && !printing && !o.includeDigital;
-  const sel = useLatest ? `${base} AND c.latest=1` : base;
+    c.tix, ${u.priceExpr} AS price, o.type_line, o.mana_cost, o.layout`;
 
   // biome-ignore lint/suspicious/noExplicitAny: raw sqlite rows
-  let rows: any[];
-  let total: number;
-  if (!o.group || useLatest) {
-    rows = sqlite
-      .prepare(`SELECT ${cols} ${from} WHERE ${sel} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-      .all(...params, pageSize, (page - 1) * pageSize);
-    total = (
-      sqlite
-        .prepare(`SELECT COUNT(*) n FROM (SELECT 1 ${from} WHERE ${sel} LIMIT ${TOTAL_CAP + 1})`)
-        .get(...params) as {
-        n: number;
-      }
-    ).n;
-  } else {
-    rows = sqlite
-      .prepare(
-        `WITH m AS MATERIALIZED (SELECT c.id, c.oracle_id AS oid, c.released_at ${from} WHERE ${base}),
-              g AS MATERIALIZED (SELECT id FROM (
-                SELECT id, ROW_NUMBER() OVER (PARTITION BY oid ORDER BY released_at DESC, id) rn FROM m) WHERE rn=1)
-         SELECT ${cols}, COUNT(*) OVER () AS total
-         FROM g CROSS JOIN cards c ON c.id=g.id CROSS JOIN oracles o ON o.oracle_id=c.oracle_id
-         ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-      )
-      .all(...params, pageSize, (page - 1) * pageSize);
-    total = rows[0]?.total ?? 0;
-  }
+  const rows = sqlite
+    .prepare(
+      `${u.prefix} SELECT ${cols}${u.windowed ? ", COUNT(*) OVER () AS total" : ""}
+       FROM ${u.from} WHERE ${u.where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    )
+    .all(...u.params, pageSize, (page - 1) * pageSize) as any[];
+  const total = u.windowed
+    ? (rows[0]?.total ?? 0)
+    : (
+        sqlite
+          .prepare(
+            `SELECT COUNT(*) n FROM (SELECT 1 FROM ${u.from} WHERE ${u.where} LIMIT ${TOTAL_CAP + 1})`,
+          )
+          .get(...u.params) as { n: number }
+      ).n;
 
   const cards: CardSummary[] = rows.map((r) => ({
     id: r.id,

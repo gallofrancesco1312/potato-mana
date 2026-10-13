@@ -8,7 +8,7 @@ import { createUserSchema, loginSchema, type Me } from "@potato-mana/shared";
 import type Database from "better-sqlite3";
 import { count, eq } from "drizzle-orm";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
-import type { z } from "zod";
+import { ZodError, type z } from "zod";
 import {
   authResolver,
   COOKIE,
@@ -18,6 +18,8 @@ import {
   verifyPassword,
 } from "./auth.ts";
 import { registerCards } from "./cards.ts";
+import { HttpError } from "./collection.ts";
+import { registerCollection } from "./collection-routes.ts";
 import type { Config } from "./config.ts";
 import type { Db } from "./db.ts";
 import { registerImages } from "./images.ts";
@@ -25,6 +27,7 @@ import { httpSource, runIngest, type Source } from "./ingest.ts";
 import { backupJob, createScheduler, notifyNtfy } from "./jobs.ts";
 import { registerOidc } from "./oidc.ts";
 import { users } from "./schema.ts";
+import { SearchError } from "./search.ts";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -78,6 +81,21 @@ export function buildApp(o: {
   app.register(rateLimit, { global: false });
 
   app.decorateRequest("user", null);
+  app.addContentTypeParser(
+    "text/csv",
+    { parseAs: "string", bodyLimit: 20_000_000 },
+    (_req, body, done) => done(null, body),
+  );
+
+  app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
+    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message });
+    if (err instanceof SearchError) return reply.code(400).send({ error: err.message });
+    if (err instanceof ZodError)
+      return reply.code(400).send({ error: "invalid input", issues: err.issues });
+    const status = err.statusCode ?? 500;
+    if (status >= 500) req.log.error(err);
+    return reply.code(status).send({ error: status < 500 ? err.message : "internal error" });
+  });
 
   // CSRF: browsers always send Origin on cross-site mutations; SameSite=Lax is the second layer.
   app.addHook("onRequest", async (req, reply) => {
@@ -131,6 +149,7 @@ export function buildApp(o: {
     async (api) => {
       const oidc = registerOidc(api, { cfg, db, startSession });
       registerCards(api, { sqlite, needUser });
+      registerCollection(api, { sqlite, cfg, needUser });
       api.get("/auth/state", async () => ({ setupNeeded: userCount() === 0, oidc }));
 
       api.post(

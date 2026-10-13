@@ -16,6 +16,7 @@ const schema = z.object({
   ADMIN_GROUP: z.string().default("admins"),
   INGEST_CRON: z.string().default("0 4 * * *"),
   SCRYFALL_USER_AGENT: z.string().default("potato-mana/0.1 (self-hosted personal instance)"),
+  RESTORE_POINT_KEEP: z.coerce.number().int().positive().default(30),
   BACKUP_CRON: z.string().default("30 2 * * *"),
   BACKUP_KEEP_DAYS: z.coerce.number().int().positive().default(14),
   NTFY_URL: z.string().url().optional(),

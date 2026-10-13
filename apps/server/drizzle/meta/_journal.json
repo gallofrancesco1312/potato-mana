@@ -50,6 +50,20 @@
       "when": 1791881905588,
       "tag": "0006_broken_morlocks",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791883916545,
+      "tag": "0007_green_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791884548153,
+      "tag": "0008_smooth_retro_girl",
+      "breakpoints": true
     }
   ]
 }
