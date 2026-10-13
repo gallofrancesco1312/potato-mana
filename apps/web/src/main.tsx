@@ -2,13 +2,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Home, JobsPage, Layout } from "./App.tsx";
+import { JobsPage, Layout } from "./App.tsx";
+import { CardPage } from "./CardPage.tsx";
 import { I18nProvider } from "./i18n.tsx";
+import { SearchPage, validateSearch } from "./Search.tsx";
 import "./index.css";
 
 const root = createRootRoute({ component: Layout });
 const routeTree = root.addChildren([
-  createRoute({ getParentRoute: () => root, path: "/", component: Home }),
+  createRoute({ getParentRoute: () => root, path: "/", component: SearchPage, validateSearch }),
+  createRoute({ getParentRoute: () => root, path: "/card/$id", component: CardPage }),
   createRoute({ getParentRoute: () => root, path: "/admin/jobs", component: JobsPage }),
 ]);
 const router = createRouter({ routeTree });

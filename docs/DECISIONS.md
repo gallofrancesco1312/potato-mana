@@ -25,7 +25,15 @@
 - Cache locally at least 24 h. Card object has `game_changer` (nullable bool), `finishes`, `prices` (usd/eur/tix keys), `card_faces`, `illustration_id`, `tcgplayer_id`, `cardmarket_id`, `mtgo_id`, `purchase_uris`.
 - Search syntax semantics checked with live counts: `c:wu` == `c>=wu` (720), `id:wu` == `id<=wu` (13457, commander "within" semantics), `id=wu` exact (512).
 
+### Measured on the real file (2026-10-13, 118,654 printings, 38,751 Oracle IDs)
+- Ingest 19-23 s, 220 MB RSS, DB 258 MB. First start in the container (download + ingest) about 30 s.
+- Search latency, in-process, typical queries 3-90 ms; worst cases 170-270 ms (10k+ result sets such as `id:wu`, `f:commander id<=wubg o:draw`). Needed: `ANALYZE` after ingest, forced join order, a precomputed `latest` printing per Oracle, a finish bitmask, and capping totals at 10,000 ("10000+") because exact counts of huge results cost more than the page itself.
+- Scryfall `rulings`: 79,706 rows for 20,080 Oracle IDs (Lightning Bolt has none).
+
 ### Implementation choices from this
 - `oracle_cards` bulk is **not** downloaded: oracle rows are derived from `default_cards` (same gameplay data on every printing), saving a 24 MB download and a second source of truth.
 - `all_cards` / Italian printed names: answer was "no"; not implemented. Add as opt-in later.
+- Group-printings picks the newest matching printing, which can be one without prices (e.g. a The List reprint); a smarter representative (prefer one with a price) is a later refinement.
+- Autocomplete is FTS5 prefix only; typo-tolerant fuzzy matching deferred.
+- `o:` searches text including reminder text (Scryfall excludes it); `fo:` is an alias.
 - Ingest is idempotent rather than byte-resumable: re-running re-downloads and re-upserts.

@@ -33,3 +33,94 @@ export type JobRow = {
   detail: string | null;
 };
 export type JobInfo = { name: string; cron: string; last: JobRow | null };
+
+export type CardImage = { normal: string | null; art_crop: string | null; small: string | null };
+export type Prices = Record<string, number | null>;
+
+export type CardSummary = {
+  id: string;
+  oracleId: string;
+  name: string;
+  setCode: string;
+  setName: string;
+  collectorNumber: string;
+  rarity: string;
+  typeLine: string | null;
+  manaCost: string | null;
+  layout: string;
+  lang: string;
+  releasedAt: string;
+  finishes: string[];
+  images: CardImage[];
+  prices: Prices;
+  price: number | null;
+};
+
+export type SearchResult = {
+  total: number;
+  totalCapped: boolean;
+  page: number;
+  pageSize: number;
+  cards: CardSummary[];
+  pricesAsOf: string | null;
+};
+
+export type CardFace = {
+  name: string;
+  manaCost: string | null;
+  typeLine: string | null;
+  oracleText: string | null;
+  power: string | null;
+  toughness: string | null;
+  loyalty: string | null;
+};
+
+export type CardDetail = {
+  id: string;
+  oracleId: string;
+  name: string;
+  setCode: string;
+  setName: string;
+  collectorNumber: string;
+  rarity: string;
+  artist: string | null;
+  lang: string;
+  releasedAt: string;
+  layout: string;
+  manaCost: string | null;
+  cmc: number;
+  typeLine: string | null;
+  oracleText: string | null;
+  power: string | null;
+  toughness: string | null;
+  loyalty: string | null;
+  keywords: string[];
+  legalities: Record<string, string>;
+  faces: CardFace[] | null;
+  finishes: string[];
+  images: CardImage[];
+  prices: Prices;
+  pricesAsOf: string | null;
+  purchaseUris: Record<string, string> | null;
+  scryfallUri: string | null;
+  superseded: boolean;
+  gameChanger: boolean;
+  rulings: Array<{ source: string; publishedAt: string; comment: string }>;
+  printings: Array<{
+    id: string;
+    setCode: string;
+    setName: string;
+    collectorNumber: string;
+    rarity: string;
+    lang: string;
+    releasedAt: string;
+    finishes: string[];
+    usd: number | null;
+    usdFoil: number | null;
+    usdEtched: number | null;
+    eur: number | null;
+    eurFoil: number | null;
+    eurEtched: number | null;
+    tix: number | null;
+  }>;
+};

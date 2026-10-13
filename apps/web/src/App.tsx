@@ -116,7 +116,7 @@ export function Layout() {
         <span className="font-semibold">{APP_NAME}</span>
         {me.data && (
           <nav className="flex gap-4">
-            <Link to="/">{t("nav.home")}</Link>
+            <Link to="/">{t("nav.search")}</Link>
             {me.data.role === "admin" && <Link to="/admin/jobs">{t("nav.jobs")}</Link>}
           </nav>
         )}
@@ -147,19 +147,6 @@ export function Layout() {
       <footer className="border-t border-stone-200 px-4 py-3 text-sm text-stone-600 dark:border-stone-700 dark:text-stone-400">
         {FOOTER_DISCLAIMER}
       </footer>
-    </div>
-  );
-}
-
-export function Home() {
-  const { t } = useI18n();
-  const me = useQuery({ queryKey: ["me"], queryFn: () => api<Me>("/me") });
-  return (
-    <div>
-      <h1 className="text-xl font-semibold">
-        {t("home.welcome", { name: me.data?.username ?? "" })}
-      </h1>
-      <p className="mt-2">{t("home.empty")}</p>
     </div>
   );
 }

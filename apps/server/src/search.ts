@@ -1,3 +1,4 @@
+import type { CardSummary } from "@potato-mana/shared";
 import type Database from "better-sqlite3";
 
 export class SearchError extends Error {}
@@ -369,25 +370,6 @@ export type SearchOpts = {
   includeDigital?: boolean;
   includeExtras?: boolean;
   currency?: "eur" | "usd";
-};
-
-export type CardSummary = {
-  id: string;
-  oracleId: string;
-  name: string;
-  setCode: string;
-  setName: string;
-  collectorNumber: string;
-  rarity: string;
-  typeLine: string | null;
-  manaCost: string | null;
-  layout: string;
-  lang: string;
-  releasedAt: string;
-  finishes: string[];
-  images: Array<{ normal: string | null; art_crop: string | null; small: string | null }>;
-  prices: Record<string, number | null>;
-  price: number | null;
 };
 
 const EXTRA_LAYOUTS =

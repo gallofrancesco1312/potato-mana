@@ -22,6 +22,7 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       ADMIN_GROUP: ${ADMIN_GROUP:-admins}
       NODE_EXTRA_CA_CERTS: /certs/potato.crt
+      INGEST_CRON: ${INGEST_CRON:-0 4 * * *}
       BACKUP_CRON: ${BACKUP_CRON:-30 2 * * *}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       NTFY_URL: ${NTFY_URL:-}

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### M1 - card database and search
+- Scryfall bulk ingest (JSONL.gz): printings, derived Oracle rows, rulings, sets, symbols; FTS5 name search; `scryfall-ingest` job (nightly + first start).
+- Search API with Scryfall-style syntax, grouping, sorting, paging; autocomplete; card detail with rulings, legalities, printings, prices and price date.
+- Local image and symbol cache; web UI: search with visual filters, results grid, card page with face flip.
+
 ### M0 - scaffold
 - pnpm workspace: `apps/server` (Fastify), `apps/web` (React/Vite/Tailwind), `packages/shared`.
 - SQLite + Drizzle migrations applied at startup; `/healthz`; JSON logs; graceful shutdown.

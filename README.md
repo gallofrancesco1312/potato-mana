@@ -1,7 +1,7 @@
 # potato-mana
 
 Self-hosted Magic: The Gathering collection and deck manager (ManaBox-class), for the home lab.
-Spec: [docs/BRIEF.md](docs/BRIEF.md). Decisions: [docs/DECISIONS.md](docs/DECISIONS.md). Status: **M0 scaffold**.
+Spec: [docs/BRIEF.md](docs/BRIEF.md). Decisions: [docs/DECISIONS.md](docs/DECISIONS.md). Status: **M1 card database and search**.
 
 Stack: Node 22, Fastify, SQLite (WAL) + Drizzle, React + Vite + Tailwind, TanStack Query/Router. One image, one `/data` volume.
 
@@ -54,12 +54,20 @@ Camera access needs HTTPS: the wildcard `*.home.potato` cert is fine once the ph
 | `PUBLIC_URL` | `http://localhost:3000` | external origin, builds the OIDC redirect URI |
 | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | empty | enable SSO login when all set |
 | `ADMIN_GROUP` | `admins` | OIDC group mapped to admin |
+| `INGEST_CRON` | `0 4 * * *` | Scryfall bulk refresh (also runs once on first start, and from the Jobs page) |
+| `SCRYFALL_USER_AGENT` | `potato-mana/0.1 (self-hosted personal instance)` | sent to Scryfall; keep it descriptive |
 | `BACKUP_CRON` | `30 2 * * *` | nightly backup schedule |
 | `BACKUP_KEEP_DAYS` | `14` | backup retention |
 | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | empty | job failure notifications (token optional) |
 | `WEB_DIR` | auto | built frontend directory |
 
 App name is the single constant `APP_NAME` in `packages/shared/src/index.ts`.
+
+## Card data and search
+
+Data comes from Scryfall bulk files (`default_cards`, `rulings`, plus `/sets` and `/symbology`), downloaded when `updated_at` changed, streamed as JSONL.gz into SQLite (about 20 s for 118k printings). Ingest is idempotent; printings that disappear are flagged `superseded`, never deleted, so collection rows keep working. Images and mana symbols are fetched from `*.scryfall.io` on first use and served unmodified from `/data/img`. Prices are Scryfall estimates and are shown with the bulk file date.
+
+Search box syntax (subset of Scryfall's): `c:rg` (includes), `c=rg`, `c<=rg`, `id<=wubg`, `t:elf`, `o:"draw a card"` (`~` is the card's name), `kw:flying`, `mv>=3`, `pow>3`, `r:rare`, `s:mh2`, `f:commander`, `usd>5`, `eur<1`, `a:"name"`, `lang:`, `year>=2020`, `is:foil|nonfoil|etched|reprint|promo|fullart|dfc|split|transform|mdfc|gamechanger|token`, `-negation`, `or`, `( )`, `!"Exact Name"`. Unknown keywords return an error instead of being ignored. Digital-only cards and tokens/extras are hidden unless asked for.
 
 ## Backup and restore
 
