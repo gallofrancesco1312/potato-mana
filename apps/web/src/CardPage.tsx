@@ -2,6 +2,7 @@ import type { CardDetail } from "@potato-mana/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
+import { AddToCollection } from "./AddToCollection.tsx";
 import { api } from "./api.ts";
 import { useI18n } from "./i18n.tsx";
 import { ManaText, money } from "./mana.tsx";
@@ -147,6 +148,8 @@ export function CardPage() {
           <p className="text-xs text-stone-600 dark:text-stone-400">
             {asOf ? t("card.pricesAsOf", { date: asOf }) : ""}
           </p>
+
+          <AddToCollection card={c} />
 
           <div className="flex flex-wrap gap-4 text-sm underline">
             {c.scryfallUri && (

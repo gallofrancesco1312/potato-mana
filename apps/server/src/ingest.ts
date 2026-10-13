@@ -7,7 +7,6 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import type Database from "better-sqlite3";
 
-// biome-ignore lint/suspicious/noExplicitAny: external JSON, validated by shape at use
 type J = any;
 
 export type BulkEntry = { type: string; updated_at: string; jsonl_download_uri: string };

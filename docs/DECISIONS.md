@@ -37,3 +37,19 @@
 - Autocomplete is FTS5 prefix only; typo-tolerant fuzzy matching deferred.
 - `o:` searches text including reminder text (Scryfall excludes it); `fo:` is an alias.
 - Ingest is idempotent rather than byte-resumable: re-running re-downloads and re-upserts.
+
+## 2026-10-13 - M2
+
+### ManaBox behaviour checked (manabox.app/guides/collection/*, fetched with curl)
+- CSV import: required columns are card name plus set code or set name, or a Scryfall ID; optional quantity, foil, collector number, language, condition, purchase price, purchase currency, misprint, altered. Errors are summarised with reason and line; the user may import only the valid rows. Set codes are preferred over names. Export includes all properties plus the binder/list name. Reproduced.
+- Collector mode: groups by set, type, color, rarity, combinable; sort by total, collected, completion; "group printings" counts a card as collected if any version is owned; the "reprint" use case ("new playable cards I do not already own in another version") is implemented as "own it in no version". Reproduced.
+- The guide does not publish the exact export header; ours is ManaBox-like and imports are alias-tolerant. Other sites' headers (Moxfield, Archidekt, Deckbox, TCGplayer, Cardmarket) are matched from memory of their exports and should be checked against real exports the first time the user imports one.
+
+### Choices
+- Restore points are full per-user snapshots (gzipped JSON of containers and stacks), not per-operation diffs: simpler, and rollback of one user can never touch another's data. Cost is one snapshot per bulk operation (about 1-2 MB for 50k stacks).
+- Restore points are taken after validation, so a rejected request leaves none behind.
+- A "collection" for value and collector purposes is every container that is not a list (binders now, registered decks in M5).
+- Purchase value only counts purchases whose currency equals the reporting currency, or the market price captured at add time in that currency; no exchange rates are guessed.
+- Merging happens on add/move/import only; editing a stack so that it becomes identical to another does not merge them yet.
+- The first benchmark with 20k stacks showed two quadratic traps, both fixed and covered by the numbers below: the merge lookup needed an index on (container_id, card_id) (insert 28 s to 3.4 s), and per-row correlated "owned" subqueries in collector mode were replaced by two aggregated CTEs joined once.
+- Measured with 20k stacks on the real catalog (in-process): container totals 70-350 ms, entry pages 150-450 ms, collector group headers 140-980 ms (the unfiltered "by set" over all 118k printings is the slow one), leaf pages 200 ms. Acceptable for M2; revisit with the 50k load test in M9 (candidate: aggregate totals without joining ownership per row).

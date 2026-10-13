@@ -51,7 +51,6 @@ export function registerCards(
 
   api.get("/cards/:id", { preHandler: o.needUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    // biome-ignore lint/suspicious/noExplicitAny: raw sqlite rows
     const c = sqlite
       .prepare(
         `SELECT c.*, o.layout, o.mana_cost, o.cmc, o.type_line, o.oracle_text, o.power, o.toughness, o.loyalty,

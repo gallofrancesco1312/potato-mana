@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import type { BulkEntry, Source } from "../src/ingest.ts";
 
-// biome-ignore lint/suspicious/noExplicitAny: fixture JSON
 export type J = any;
 const LEGAL_ALL = { commander: "legal", modern: "legal", standard: "not_legal" };
 

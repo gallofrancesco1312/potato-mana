@@ -228,7 +228,6 @@ export function listEntries(sqlite: Database.Database, userId: number, o: EntryQ
     }[o.sort ?? "name"] ?? `lower(c.name) ${dir}`;
   const pageSize = Math.min(Math.max(o.pageSize ?? 60, 1), 200);
   const page = Math.max(o.page ?? 1, 1);
-  // biome-ignore lint/suspicious/noExplicitAny: raw sqlite rows
   const rows = sqlite
     .prepare(
       `SELECT e.*, k.name AS container_name, k.kind AS container_kind, ${priceSql(cur)} AS unit_price,

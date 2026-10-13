@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### M2 - collection
+- Binders and lists with nesting, stacks with all properties, bulk edit, delete, partial move, add whole set.
+- Collector mode with nested grouping, group printings and reprint filter; search keywords `is:owned`, `in:`.
+- Value and purchase tracking per container and overall.
+- CSV import (tolerant headers, failure report with line numbers, failed-rows CSV) and export.
+- Restore points before bulk operations and imports, undoable rollback, per-user isolation tests.
+- Web: collection, container, collector, import, restore pages; add-to-collection on the card page.
+
 ### M1 - card database and search
 - Scryfall bulk ingest (JSONL.gz): printings, derived Oracle rows, rulings, sets, symbols; FTS5 name search; `scryfall-ingest` job (nightly + first start).
 - Search API with Scryfall-style syntax, grouping, sorting, paging; autocomplete; card detail with rulings, legalities, printings, prices and price date.

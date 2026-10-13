@@ -117,6 +117,8 @@ export function Layout() {
         {me.data && (
           <nav className="flex gap-4">
             <Link to="/">{t("nav.search")}</Link>
+            <Link to="/collection">{t("nav.collection")}</Link>
+            <Link to="/collector">{t("nav.collector")}</Link>
             {me.data.role === "admin" && <Link to="/admin/jobs">{t("nav.jobs")}</Link>}
           </nav>
         )}

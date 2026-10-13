@@ -90,7 +90,6 @@ export function collector(sqlite: Database.Database, userId: number, o: Collecto
       pct: "CAST(collected AS REAL)/total",
     }[o.sort ?? "name"];
     const order = `${sort} ${o.sort === "name" || !o.sort ? (o.dir === "desc" ? "DESC" : "ASC") : dir}`;
-    // biome-ignore lint/suspicious/noExplicitAny: raw rows
     const groups = sqlite
       .prepare(
         `${prefix} SELECT k AS key, MIN(lbl) AS label, COUNT(*) AS total, SUM(CASE WHEN own>0 THEN 1 ELSE 0 END) AS collected
@@ -104,7 +103,6 @@ export function collector(sqlite: Database.Database, userId: number, o: Collecto
 
   const pageSize = Math.min(Math.max(o.pageSize ?? 60, 1), 200);
   const page = Math.max(o.page ?? 1, 1);
-  // biome-ignore lint/suspicious/noExplicitAny: raw rows
   const rows = sqlite
     .prepare(
       `${prefix} SELECT c.id, c.oracle_id, c.name, c.set_code, c.set_name, c.collector_number, c.rarity, c.lang,

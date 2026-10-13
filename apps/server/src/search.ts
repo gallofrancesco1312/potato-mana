@@ -471,7 +471,6 @@ export function searchCards(sqlite: Database.Database, o: SearchOpts & { userId?
     c.released_at, c.finishes, c.images, c.usd, c.usd_foil, c.usd_etched, c.eur, c.eur_foil, c.eur_etched,
     c.tix, ${u.priceExpr} AS price, o.type_line, o.mana_cost, o.layout`;
 
-  // biome-ignore lint/suspicious/noExplicitAny: raw sqlite rows
   const rows = sqlite
     .prepare(
       `${u.prefix} SELECT ${cols}${u.windowed ? ", COUNT(*) OVER () AS total" : ""}

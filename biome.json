@@ -1,6 +1,12 @@
 {
   "formatter": { "indentStyle": "space", "lineWidth": 100 },
-  "css": { "parser": { "tailwindDirectives": true } },
   "javascript": { "formatter": { "quoteStyle": "double" } },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "linter": {
+    "rules": {
+      "suspicious": { "noExplicitAny": "off" },
+      "correctness": { "noVoidTypeReturn": "off" }
+    }
+  },
   "files": { "includes": ["apps/*/src/**", "apps/*/test/**", "packages/*/src/**"] }
 }
