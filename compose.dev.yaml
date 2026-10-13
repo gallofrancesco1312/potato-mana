@@ -1,0 +1,11 @@
+# Local development / smoke test: no Traefik, plain http://localhost:3000, local accounts only.
+services:
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      COOKIE_SECURE: "false"
+    volumes:
+      - dev-data:/data
+volumes:
+  dev-data:

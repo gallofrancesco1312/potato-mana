@@ -1,0 +1,6 @@
+{
+  "formatter": { "indentStyle": "space", "lineWidth": 100 },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "javascript": { "formatter": { "quoteStyle": "double" } },
+  "files": { "includes": ["apps/*/src/**", "apps/*/test/**", "packages/*/src/**"] }
+}

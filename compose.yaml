@@ -1,0 +1,38 @@
+# Production stack. Needs the external `proxy` network created by the network stack (Traefik).
+services:
+  app:
+    image: forgejo.home.potato/ciccio/potato-mana:${TAG:-latest}
+    build: .
+    container_name: potato-mana
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    environment:
+      COOKIE_SECURE: "true"
+      FORWARD_AUTH: ${FORWARD_AUTH:-true}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.18.0.0/16}
+      ADMIN_GROUP: ${ADMIN_GROUP:-admins}
+      BACKUP_CRON: ${BACKUP_CRON:-30 2 * * *}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+    volumes:
+      - ./data:/data
+    networks: [proxy]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.potato-mana.rule: Host(`${APP_HOST:-mana-potato.home.potato}`)
+      traefik.http.routers.potato-mana.entrypoints: websecure
+      traefik.http.routers.potato-mana.tls: "true"
+      # Required while FORWARD_AUTH=true: the app trusts Remote-User set by Authelia.
+      traefik.http.routers.potato-mana.middlewares: authelia@docker
+      traefik.http.services.potato-mana.loadbalancer.server.port: "3000"
+
+networks:
+  proxy:
+    external: true
