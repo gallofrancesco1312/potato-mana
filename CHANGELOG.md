@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### M3 - prices and alerts
+- Sparse daily price history for tracked cards, first point on view/add; collection value history per container; best and worst movers.
+- Per-user reference currency; "prices as of" on search, collection, container, watchlist, card and settings pages.
+- Watchlist, price alerts (above, below, percent rise/drop; edge-triggered), notification inbox with unread badge, ntfy delivery with optional personal topic.
+- Accessible line chart (step lines, crosshair tooltip, keyboard, table view, light/dark tokens).
+
 ### M2 - collection
 - Binders and lists with nesting, stacks with all properties, bulk edit, delete, partial move, add whole set.
 - Collector mode with nested grouping, group printings and reprint filter; search keywords `is:owned`, `in:`.

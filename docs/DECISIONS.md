@@ -53,3 +53,20 @@
 - Merging happens on add/move/import only; editing a stack so that it becomes identical to another does not merge them yet.
 - The first benchmark with 20k stacks showed two quadratic traps, both fixed and covered by the numbers below: the merge lookup needed an index on (container_id, card_id) (insert 28 s to 3.4 s), and per-row correlated "owned" subqueries in collector mode were replaced by two aggregated CTEs joined once.
 - Measured with 20k stacks on the real catalog (in-process): container totals 70-350 ms, entry pages 150-450 ms, collector group headers 140-980 ms (the unfiltered "by set" over all 118k printings is the slow one), leaf pages 200 ms. Acceptable for M2; revisit with the 50k load test in M9 (candidate: aggregate totals without joining ownership per row).
+
+## 2026-10-13 - M3
+
+### MTGJSON checked (mtgjson.com, fetched with curl)
+- Licence: MIT. Files: `AllPricesToday.json(.gz)` (5.5 MB gz, current day), `AllPrices.json` (90 days), keyed by MTGJSON uuid; `AllIdentifiers.json.gz` (233 MB gz) maps uuid to other ids including Scryfall's. The mapping file is what makes a second price source expensive: it needs a streaming parse of a multi-GB JSON and a join for every price lookup.
+- Decision: **not implemented in M3.** The answer to the planning question was "default: Scryfall, MTGJSON optional". The `PriceProvider` boundary and the generic `price_points(card_id, source, finish, date, value)` table are in place so a provider can be added without touching callers; prices outside the Scryfall columns would additionally need the value/alert/movers SQL to read from `price_points` instead of `cards`.
+- "Reference price" (low/trend/market) does not exist in Scryfall data (one number per currency and finish), so the per-user setting is the reference **currency**, which selects the source (EUR: Cardmarket, USD: TCGplayer). No cross-currency fallback or conversion is guessed.
+
+### Choices
+- Sparse history (write on change) instead of one row per card per day: the same chart data in a fraction of the rows (unchanged day: 0 rows written). Charts draw step lines because a price holds until the next change.
+- Value history is computed from the current price columns at refresh time, in each user's currency of that day; rows carry their currency so a later currency switch does not mix units.
+- Alerts compare the exact finish's price point (no foil-to-nonfoil fallback): no foil price means no foil alert. Valuation keeps its fallback.
+- An alert on percent change only fires on the day a new point is produced; above/below are edge-triggered.
+- Cards viewed only once stay tracked for 90 days (rolling window for the detail chart); owned/watched cards are tracked as long as they are owned/watched.
+- Charts follow the dataviz method: one axis, 2px lines, categorical slots 1-3 (validated all-pairs in the reference palette) mapped to finish identity, legend only for 2+ series, direct end label, crosshair/tooltip by pointer and arrow keys, table view for all values, light/dark tokens.
+- UI could not be driven in a real browser here: the bundled Chromium needs system libraries (libnspr4, libnss3, ...) that are not installed. The chart component was server-rendered and rasterised (light and dark) and inspected; that caught two real bugs (data above the top tick, clipped labels). Playwright flows remain to be run on a machine with a browser.
+- Measured with 20k tracked cards on the real catalog: first snapshot 1.6 s, later days about 0.7 s.

@@ -6,6 +6,7 @@ import { AddToCollection } from "./AddToCollection.tsx";
 import { api } from "./api.ts";
 import { useI18n } from "./i18n.tsx";
 import { ManaText, money } from "./mana.tsx";
+import { PriceHistory, WatchAlert } from "./Prices.tsx";
 
 const FORMATS = [
   "standard",
@@ -149,6 +150,12 @@ export function CardPage() {
             {asOf ? t("card.pricesAsOf", { date: asOf }) : ""}
           </p>
 
+          <PriceHistory cardId={c.id} pricesAsOf={c.pricesAsOf} />
+          <WatchAlert
+            cardId={c.id}
+            finishes={c.finishes}
+            watched={(c as unknown as { watched: boolean }).watched}
+          />
           <AddToCollection card={c} />
 
           <div className="flex flex-wrap gap-4 text-sm underline">

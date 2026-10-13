@@ -199,6 +199,8 @@ export async function runIngest(o: {
   src: Source;
   dir: string;
   progress?: (msg: string) => void;
+  /** runs once the printings changed, with the bulk file's updated_at; its result is added to the summary */
+  afterCards?: (updatedAt: string) => string | undefined;
 }): Promise<string> {
   const { sqlite, src } = o;
   const progress = o.progress ?? (() => {});
@@ -257,6 +259,8 @@ export async function runIngest(o: {
     putSetting(sqlite, "bulk.default_cards", dc.updated_at);
     await rm(file, { force: true });
     parts.push(`cards ${n}`);
+    const extra = o.afterCards?.(dc.updated_at);
+    if (extra) parts.push(extra);
   } else parts.push("cards up to date");
 
   // --- rulings ---

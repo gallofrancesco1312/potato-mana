@@ -40,11 +40,12 @@ export const backupJob = (
   },
 });
 
-export async function notifyNtfy(cfg: Config, title: string, body: string) {
-  if (!cfg.NTFY_URL || !cfg.NTFY_TOPIC) return;
+export async function notifyNtfy(cfg: Config, title: string, body: string, topic?: string | null) {
+  const t = topic || cfg.NTFY_TOPIC;
+  if (!cfg.NTFY_URL || !t) return;
   const headers: Record<string, string> = { Title: title };
   if (cfg.NTFY_TOKEN) headers.Authorization = `Bearer ${cfg.NTFY_TOKEN}`;
-  await fetch(`${cfg.NTFY_URL.replace(/\/$/, "")}/${cfg.NTFY_TOPIC}`, {
+  await fetch(`${cfg.NTFY_URL.replace(/\/$/, "")}/${t}`, {
     method: "POST",
     headers,
     body,

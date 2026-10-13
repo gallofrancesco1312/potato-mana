@@ -44,6 +44,8 @@ export type EntryRow = {
 };
 
 export type EntriesPage = {
+  currency: string;
+  pricesAsOf: string;
   stacks: number;
   qty: number;
   value: number | null;

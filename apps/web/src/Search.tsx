@@ -316,7 +316,7 @@ export function SearchPage() {
       )}
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {cards.map((c) => (
-          <CardTile key={c.id} c={c} />
+          <CardTile key={c.id} c={c} currency={first?.currency} />
         ))}
       </ul>
       {first && cards.length === 0 && !err && <p>{t("search.empty")}</p>}
@@ -334,9 +334,9 @@ export function SearchPage() {
   );
 }
 
-function CardTile({ c }: { c: CardSummary }) {
+function CardTile({ c, currency }: { c: CardSummary; currency?: string }) {
   const { lang, t } = useI18n();
-  const price = money(c.price, lang);
+  const price = money(c.price, lang, currency);
   return (
     <li>
       <Link to="/card/$id" params={{ id: c.id }} className="flex flex-col gap-1">

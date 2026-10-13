@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { api } from "./api.ts";
 import { useI18n } from "./i18n.tsx";
 import { money } from "./mana.tsx";
+import { Movers, ValueHistory } from "./Prices.tsx";
 import type { ContainerRow, EntriesPage, EntryRow } from "./types.ts";
 
 const input =
@@ -16,13 +17,16 @@ const btn2 =
 export const useContainers = () =>
   useQuery({
     queryKey: ["containers"],
-    queryFn: () => api<{ containers: ContainerRow[] }>("/containers"),
+    queryFn: () =>
+      api<{ containers: ContainerRow[]; currency: string; pricesAsOf: string }>("/containers"),
   });
 
 function Totals({
   c,
+  cur = "EUR",
 }: {
   c: Pick<ContainerRow, "qty" | "value" | "purchase" | "valueWithPurchase" | "purchaseKnownQty">;
+  cur?: string;
 }) {
   const { t, lang } = useI18n();
   const gain =
@@ -30,13 +34,13 @@ function Totals({
   const pct = gain != null && c.purchase ? (gain / c.purchase) * 100 : null;
   return (
     <span className="text-sm text-stone-600 dark:text-stone-400">
-      {t("col.cards", { n: String(c.qty) })} · {t("col.value")}: ≈ {money(c.value ?? 0, lang)}
+      {t("col.cards", { n: String(c.qty) })} · {t("col.value")}: ≈ {money(c.value ?? 0, lang, cur)}
       {c.purchase != null && c.purchaseKnownQty > 0 && (
         <>
           {" "}
-          · {t("col.purchase")}: {money(c.purchase, lang)} · {t("col.gain")}:{" "}
+          · {t("col.purchase")}: {money(c.purchase, lang, cur)} · {t("col.gain")}:{" "}
           {gain != null && gain >= 0 ? "+" : ""}
-          {money(gain, lang)}
+          {money(gain, lang, cur)}
           {pct != null ? ` (${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%)` : ""}
         </>
       )}
@@ -45,7 +49,7 @@ function Totals({
 }
 
 export function CollectionPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const qc = useQueryClient();
   const q = useContainers();
   const [name, setName] = useState("");
@@ -89,7 +93,7 @@ export function CollectionPage() {
               {c.name}
             </Link>
             <div>
-              <Totals c={c} />
+              <Totals c={c} cur={q.data?.currency} />
             </div>
           </li>
         ))}
@@ -113,7 +117,14 @@ export function CollectionPage() {
           {t("col.restore")}
         </Link>
       </div>
-      <Totals c={total} />
+      <Totals c={total} cur={q.data?.currency} />
+      {q.data?.pricesAsOf && (
+        <p className="text-xs text-stone-600 dark:text-stone-400">
+          {t("card.pricesAsOf", { date: new Date(q.data.pricesAsOf).toLocaleDateString(lang) })}
+        </p>
+      )}
+      <ValueHistory container="all" />
+      <Movers container="all" />
       <form onSubmit={submit} className="flex flex-wrap gap-2">
         <select
           className={input}
@@ -227,9 +238,15 @@ export function ContainerPage() {
               valueWithPurchase: me?.valueWithPurchase ?? null,
               purchaseKnownQty: me?.purchaseKnownQty ?? 0,
             }}
+            cur={head.currency}
           />
         )}
       </div>
+      {head?.pricesAsOf && (
+        <p className="text-xs text-stone-600 dark:text-stone-400">
+          {t("card.pricesAsOf", { date: new Date(head.pricesAsOf).toLocaleDateString(lang) })}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         <form
           className="flex flex-1 gap-2"
@@ -364,6 +381,7 @@ export function ContainerPage() {
         />
       )}
 
+      {id !== "all" && <ValueHistory container={id} />}
       {list.isSuccess && entries.length === 0 && <p>{t("col.empty")}</p>}
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {entries.map((e) => (
@@ -374,6 +392,7 @@ export function ContainerPage() {
             checked={sel.has(e.id)}
             onToggle={() => toggle(e.id)}
             lang={lang}
+            currency={head?.currency}
           />
         ))}
       </ul>
@@ -397,7 +416,9 @@ function EntryTile({
   checked,
   onToggle,
   lang,
+  currency,
 }: {
+  currency?: string;
   e: EntryRow;
   select: boolean;
   checked: boolean;
@@ -432,7 +453,7 @@ function EntryTile({
         {e.altered ? " · altered" : ""}
       </span>
       <span className="text-xs">
-        {e.unitPrice != null ? `≈ ${money(e.unitPrice * e.qty, lang)}` : ""}
+        {e.unitPrice != null ? `≈ ${money(e.unitPrice * e.qty, lang, currency)}` : ""}
         {e.tags.length ? ` · ${e.tags.join(", ")}` : ""}
       </span>
     </>

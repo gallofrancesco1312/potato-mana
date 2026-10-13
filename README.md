@@ -1,7 +1,7 @@
 # potato-mana
 
 Self-hosted Magic: The Gathering collection and deck manager (ManaBox-class), for the home lab.
-Spec: [docs/BRIEF.md](docs/BRIEF.md). Decisions: [docs/DECISIONS.md](docs/DECISIONS.md). Status: **M2 collection** (M0 scaffold, M1 catalog and search done).
+Spec: [docs/BRIEF.md](docs/BRIEF.md). Decisions: [docs/DECISIONS.md](docs/DECISIONS.md). Status: **M3 prices and alerts** (M0 scaffold, M1 catalog, M2 collection done).
 
 Stack: Node 22, Fastify, SQLite (WAL) + Drizzle, React + Vite + Tailwind, TanStack Query/Router. One image, one `/data` volume.
 
@@ -79,6 +79,14 @@ Search box syntax (subset of Scryfall's): `c:rg` (includes), `c=rg`, `c<=rg`, `i
 - **Restore points**: taken automatically before bulk edits, deletes, moves, set adds, imports and rollbacks (per user, last `RESTORE_POINT_KEEP`). A rollback restores containers and stacks and is itself undoable.
 - **CSV import**: `POST /api/v1/import/csv` (or the Import page). Headers are matched tolerantly (ManaBox, Moxfield, Archidekt, Deckbox, TCGplayer, Cardmarket style); minimum is a Scryfall ID, or name plus set code/name. A `Binder Name` column creates the containers. Valid rows are imported, failures are reported with line numbers and returned as a downloadable CSV with an `error` column. Export is the ManaBox-like column set plus notes, tags and date.
 - Search keywords for owned cards: `is:owned`, `in:"Binder name"`.
+
+## Prices, history and alerts
+
+- Prices are Scryfall estimates: Cardmarket (EUR), TCGplayer (USD) and MTGO (TIX). Each user picks a reference currency in Settings (EUR or USD); values, totals and charts follow it. Every price view shows the date of the bulk file it comes from.
+- History is **sparse**: a point is stored only on the day a value changes, and only for cards that are in a container, on the watchlist, in an active alert, or were viewed in the last 90 days. Opening a card or adding it to a container records a first point immediately, so charts do not start a day late. The daily cost is under a second for 20k tracked cards.
+- The collection value history (overall and per container) gets one point a day after each card-data refresh. Movers compare each owned card with its price at the start of the chosen window (7/30/90 days), weighted by quantity.
+- **Alerts** per card and finish: price at or above, at or below, or a percent rise/drop versus the previous price. Above/below fire once per crossing and re-arm when the condition clears. Notifications land in the in-app inbox and, when `NTFY_URL` is set, on ntfy (instance topic, or the user's own topic from Settings). Job failures use the instance topic.
+- `PriceProvider` (`apps/server/src/prices.ts`) is the extension point: a provider writes `price_points` rows for a new `source`. Only Scryfall is built in; MTGJSON is not implemented (see DECISIONS).
 
 ### Add an importer
 

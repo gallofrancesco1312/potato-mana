@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { trackView } from "./prices.ts";
 import { autocomplete, SearchError, type SearchOpts, searchCards } from "./search.ts";
+import { pricesDate, userCurrency } from "./settings.ts";
 
 const SORTS = ["name", "set", "released", "price", "cmc", "number"] as const;
 const bool = (v: unknown) => v === "1" || v === "true";
@@ -31,7 +33,12 @@ export function registerCards(
       pageSize: Number(q.pageSize) || 60,
       includeDigital: bool(q.digital),
       includeExtras: bool(q.extras),
-      currency: q.currency === "usd" ? "usd" : "eur",
+      currency:
+        q.currency === "usd"
+          ? "usd"
+          : q.currency === "eur"
+            ? "eur"
+            : userCurrency(sqlite, req.user?.id),
     };
     try {
       return {
@@ -59,6 +66,7 @@ export function registerCards(
       )
       .get(id) as any;
     if (!c) return reply.code(404).send({ error: "card not found" });
+    trackView(sqlite, id, pricesDate(sqlite)); // starts (or keeps) a price history window for this card
     const rulings = sqlite
       .prepare(
         "SELECT source, published_at AS publishedAt, comment FROM rulings WHERE oracle_id=? ORDER BY published_at, id",
@@ -110,6 +118,10 @@ export function registerCards(
       scryfallUri: c.scryfall_uri,
       superseded: c.superseded === 1,
       gameChanger: c.game_changer === 1,
+      watched: !!sqlite
+        .prepare("SELECT 1 FROM watchlist WHERE user_id=? AND card_id=?")
+        .get(req.user?.id, id),
+      currency: userCurrency(sqlite, req.user?.id).toUpperCase(),
       rulings,
       printings: printings.map((p) => ({ ...p, finishes: JSON.parse(p.finishes) })),
     };

@@ -35,6 +35,7 @@ export type CollectorQuery = {
   page?: number;
   pageSize?: number;
   includeDigital?: boolean;
+  currency?: "eur" | "usd";
 };
 
 export function collector(sqlite: Database.Database, userId: number, o: CollectorQuery) {
@@ -62,6 +63,7 @@ export function collector(sqlite: Database.Database, userId: number, o: Collecto
     q: o.q ?? "",
     group: o.group,
     includeDigital: o.includeDigital,
+    currency: o.currency,
     userId,
   };
   const u = universe(sopts);

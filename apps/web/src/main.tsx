@@ -8,6 +8,7 @@ import { CollectionPage, ContainerPage } from "./Collection.tsx";
 import { CollectorPage } from "./Collector.tsx";
 import { ImportPage } from "./ImportPage.tsx";
 import { I18nProvider } from "./i18n.tsx";
+import { AlertsPage, SettingsPage } from "./Prices.tsx";
 import { RestorePage } from "./Restore.tsx";
 import { SearchPage, validateSearch } from "./Search.tsx";
 import "./index.css";
@@ -21,6 +22,8 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: () => root, path: "/collector", component: CollectorPage }),
   createRoute({ getParentRoute: () => root, path: "/import", component: ImportPage }),
   createRoute({ getParentRoute: () => root, path: "/restore", component: RestorePage }),
+  createRoute({ getParentRoute: () => root, path: "/alerts", component: AlertsPage }),
+  createRoute({ getParentRoute: () => root, path: "/settings", component: SettingsPage }),
   createRoute({ getParentRoute: () => root, path: "/admin/jobs", component: JobsPage }),
 ]);
 const router = createRouter({ routeTree });

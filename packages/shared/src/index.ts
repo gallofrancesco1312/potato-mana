@@ -62,6 +62,7 @@ export type SearchResult = {
   page: number;
   pageSize: number;
   cards: CardSummary[];
+  currency: string;
   pricesAsOf: string | null;
 };
 

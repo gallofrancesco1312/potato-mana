@@ -5,7 +5,6 @@ import {
   addEntry,
   addEntrySchema,
   addSet,
-  asCur,
   bulkPatch,
   bulkUpdate,
   containerTotals,
@@ -21,6 +20,7 @@ import type { Config } from "./config.ts";
 import { toCsv } from "./csv.ts";
 import { importCsv } from "./import.ts";
 import { createRestorePoint, restoreFrom } from "./restore.ts";
+import { pricesDate, userCurrency } from "./settings.ts";
 
 const ids = z.array(z.number().int()).min(1).max(5000);
 const containerBody = z.object({
@@ -48,10 +48,17 @@ export function registerCollection(
   const snapshot = (req: FastifyRequest, label: string) =>
     createRestorePoint(sqlite, uid(req), label, cfg.RESTORE_POINT_KEEP);
   const q = (req: FastifyRequest) => req.query as Record<string, string | undefined>;
+  /** explicit ?currency= wins, otherwise the user's own setting */
+  const curOf = (req: FastifyRequest) => {
+    const c = q(req).currency;
+    return c === "usd" || c === "eur" ? c : userCurrency(sqlite, uid(req));
+  };
 
   // ---- containers ----
   api.get("/containers", pre, async (req) => ({
-    containers: containerTotals(sqlite, uid(req), asCur(q(req).currency)),
+    containers: containerTotals(sqlite, uid(req), curOf(req)),
+    currency: curOf(req).toUpperCase(),
+    pricesAsOf: pricesDate(sqlite),
   }));
 
   api.post("/containers", pre, async (req, reply) => {
@@ -113,7 +120,7 @@ export function registerCollection(
       dir: p.dir,
       page: Number(p.page) || 1,
       pageSize: Number(p.pageSize) || 60,
-      currency: asCur(p.currency),
+      currency: curOf(req),
     });
   });
 
@@ -209,6 +216,7 @@ export function registerCollection(
       page: Number(p.page) || 1,
       pageSize: Number(p.pageSize) || 60,
       includeDigital: p.digital === "1",
+      currency: curOf(req),
     });
   });
 

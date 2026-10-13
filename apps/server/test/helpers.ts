@@ -93,7 +93,7 @@ export const fixture: J[] = [
     game_changer: true,
     produced_mana: ["C"],
     finishes: ["foil"],
-    prices: { eur: "20.00" },
+    prices: { eur_foil: "20.00" },
   }),
   card({
     name: "Delver of Secrets // Insectile Aberration",
@@ -215,4 +215,87 @@ export function source(cards: J[], updatedAt = "2026-01-01T00:00:00Z") {
     download: async (u, d) => writeFileSync(d, readFileSync(u)),
   };
   return src;
+}
+
+import { afterEach } from "vitest";
+import { buildApp } from "../src/app.ts";
+import { loadConfig } from "../src/config.ts";
+import { openDb } from "../src/db.ts";
+import { runIngest } from "../src/ingest.ts";
+
+const open: Array<{ close: () => Promise<unknown> }> = [];
+afterEach(async () => {
+  while (open.length) await open.pop()?.close();
+});
+
+export async function setup(cards: J[] = fixture, env: Record<string, string> = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "pm-"));
+  const cfg = loadConfig({ DATA_DIR: dir, WEB_DIR: join(dir, "none"), ...env });
+  const { db, sqlite } = openDb(":memory:");
+  const src = source(cards);
+  const app = buildApp({ cfg, db, sqlite, logger: false, schedule: false, source: src });
+  open.push(app);
+  await runIngest({ sqlite, src, dir: join(dir, "tmp") });
+  const sid = (r: { cookies: Array<{ name: string; value: string }> }) =>
+    `sid=${r.cookies.find((c) => c.name === "sid")?.value}`;
+  const adminCookie = sid(
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/setup",
+      payload: { username: "ciccio", password: "correct-horse-battery" },
+    }),
+  );
+  await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/users",
+    headers: { cookie: adminCookie },
+    payload: { username: "roberta", password: "another-long-password" },
+  });
+  const otherCookie = sid(
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { username: "roberta", password: "another-long-password" },
+    }),
+  );
+  const api = (cookie: string) => ({
+    get: async (url: string) => app.inject({ url: `/api/v1${url}`, headers: { cookie } }),
+    post: async (url: string, payload?: unknown) =>
+      app.inject({
+        method: "POST",
+        url: `/api/v1${url}`,
+        headers: { cookie },
+        payload: payload as J,
+      }),
+    put: async (url: string, payload?: unknown) =>
+      app.inject({
+        method: "PUT",
+        url: `/api/v1${url}`,
+        headers: { cookie },
+        payload: payload as J,
+      }),
+    patch: async (url: string, payload?: unknown) =>
+      app.inject({
+        method: "PATCH",
+        url: `/api/v1${url}`,
+        headers: { cookie },
+        payload: payload as J,
+      }),
+    del: async (url: string) =>
+      app.inject({ method: "DELETE", url: `/api/v1${url}`, headers: { cookie } }),
+    csv: async (url: string, text: string) =>
+      app.inject({
+        method: "POST",
+        url: `/api/v1${url}`,
+        headers: { cookie, "content-type": "text/csv" },
+        payload: text,
+      }),
+  });
+  const id = (name: string, set?: string) =>
+    (
+      sqlite
+        .prepare(`SELECT id FROM cards WHERE name=? ${set ? "AND set_code=?" : ""}`)
+        .get(...(set ? [name, set] : [name])) as J
+    ).id as string;
+  return { app, sqlite, dir, a: api(adminCookie), b: api(otherCookie), id };
 }

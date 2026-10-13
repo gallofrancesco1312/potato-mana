@@ -99,6 +99,12 @@ export function Layout() {
     queryFn: () => api<{ setupNeeded: boolean; oidc: boolean }>("/auth/state"),
     enabled: me.isError,
   });
+  const unread = useQuery({
+    queryKey: ["notifications", "unread"],
+    queryFn: () => api<{ unread: number }>("/notifications?unread=1"),
+    enabled: !!me.data,
+    refetchInterval: 60_000,
+  });
   const logout = useMutation({
     mutationFn: () => api("/auth/logout", { method: "POST" }),
     onSuccess: () => qc.invalidateQueries(),
@@ -119,6 +125,11 @@ export function Layout() {
             <Link to="/">{t("nav.search")}</Link>
             <Link to="/collection">{t("nav.collection")}</Link>
             <Link to="/collector">{t("nav.collector")}</Link>
+            <Link to="/alerts">
+              {t("nav.alerts")}
+              {unread.data?.unread ? ` (${unread.data.unread})` : ""}
+            </Link>
+            <Link to="/settings">{t("nav.settings")}</Link>
             {me.data.role === "admin" && <Link to="/admin/jobs">{t("nav.jobs")}</Link>}
           </nav>
         )}

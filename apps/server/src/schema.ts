@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -213,4 +213,100 @@ export const restorePoints = sqliteTable(
     data: blob("data", { mode: "buffer" }).notNull(),
   },
   (t) => [index("restore_user_idx").on(t.userId)],
+);
+
+/** Sparse price history: a row exists only on the day a (card, source, finish) value changed. */
+export const pricePoints = sqliteTable(
+  "price_points",
+  {
+    cardId: text("card_id").notNull(),
+    /** tcgplayer (USD) | cardmarket (EUR) | mtgo (TIX), from Scryfall prices */
+    source: text("source").notNull(),
+    finish: text("finish").notNull(),
+    date: text("date").notNull(),
+    value: real("value"),
+  },
+  (t) => [primaryKey({ columns: [t.cardId, t.source, t.finish, t.date] })],
+);
+
+/** Cards viewed recently get a price history window even when nobody owns them. */
+export const recentViews = sqliteTable("recent_views", {
+  cardId: text("card_id").primaryKey(),
+  viewedAt: text("viewed_at").notNull(),
+});
+
+export const userSettings = sqliteTable("user_settings", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  currency: text("currency").notNull().default("EUR"),
+  /** overrides the instance topic for this user's notifications */
+  ntfyTopic: text("ntfy_topic"),
+});
+
+/** Daily value of a container (0 = whole collection) in the user's currency of that day. */
+export const valuePoints = sqliteTable(
+  "value_points",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    containerId: integer("container_id").notNull(),
+    date: text("date").notNull(),
+    currency: text("currency").notNull(),
+    value: real("value").notNull(),
+    qty: integer("qty").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.containerId, t.date] })],
+);
+
+export const watchlist = sqliteTable(
+  "watchlist",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cardId: text("card_id").notNull(),
+    addedAt: text("added_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.cardId] })],
+);
+
+export const alerts = sqliteTable(
+  "alerts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cardId: text("card_id").notNull(),
+    finish: text("finish", { enum: ["nonfoil", "foil", "etched"] })
+      .notNull()
+      .default("nonfoil"),
+    /** above/below: price threshold in the user's currency; rise/drop: percent change vs previous price */
+    kind: text("kind", { enum: ["above", "below", "rise", "drop"] }).notNull(),
+    threshold: real("threshold").notNull(),
+    active: integer("active").notNull().default(1),
+    /** edge trigger for above/below: fires once, re-arms when the condition becomes false */
+    armed: integer("armed").notNull().default(1),
+    lastTriggeredAt: text("last_triggered_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [index("alerts_user_idx").on(t.userId)],
+);
+
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    cardId: text("card_id"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    readAt: text("read_at"),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.readAt)],
 );

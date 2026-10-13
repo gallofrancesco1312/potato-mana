@@ -26,6 +26,8 @@ import { registerImages } from "./images.ts";
 import { httpSource, runIngest, type Source } from "./ingest.ts";
 import { backupJob, createScheduler, notifyNtfy } from "./jobs.ts";
 import { registerOidc } from "./oidc.ts";
+import { type AlertHit, dailyPriceTasks } from "./prices.ts";
+import { registerPrices } from "./prices-routes.ts";
 import { users } from "./schema.ts";
 import { SearchError } from "./search.ts";
 
@@ -57,13 +59,32 @@ export function buildApp(o: {
       {
         name: "scryfall-ingest",
         cron: cfg.INGEST_CRON,
-        run: (progress) =>
-          runIngest({
+        run: async (progress) => {
+          const hits: AlertHit[] = [];
+          const summary = await runIngest({
             sqlite,
             src: o.source ?? httpSource(cfg.SCRYFALL_USER_AGENT),
             dir: `${cfg.DATA_DIR}/tmp`,
             progress,
-          }),
+            afterCards: (updatedAt) => {
+              const r = dailyPriceTasks(sqlite, updatedAt.slice(0, 10));
+              hits.push(...r.hits);
+              return `price points ${r.points}, value points ${r.values}, alerts fired ${r.hits.length}`;
+            },
+          });
+          // push after the DB work is done; a notification failure must not fail the ingest
+          for (const h of hits) {
+            const topic = (
+              sqlite
+                .prepare("SELECT ntfy_topic AS t FROM user_settings WHERE user_id=?")
+                .get(h.userId) as { t: string | null } | undefined
+            )?.t;
+            await notifyNtfy(cfg, h.title, h.body, topic).catch((e) =>
+              app.log.warn({ err: String(e) }, "ntfy alert failed"),
+            );
+          }
+          return summary;
+        },
       },
     ],
     (name, err) => notifyNtfy(cfg, `Job failed: ${name}`, err),
@@ -150,6 +171,7 @@ export function buildApp(o: {
       const oidc = registerOidc(api, { cfg, db, startSession });
       registerCards(api, { sqlite, needUser });
       registerCollection(api, { sqlite, cfg, needUser });
+      registerPrices(api, { sqlite, needUser });
       api.get("/auth/state", async () => ({ setupNeeded: userCount() === 0, oidc }));
 
       api.post(

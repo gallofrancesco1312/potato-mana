@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import { z } from "zod";
+import { ensureBaseline } from "./prices.ts";
 import { compile, parse, SearchError } from "./search.ts";
+import { pricesDate } from "./settings.ts";
 
 export class HttpError extends Error {
   constructor(
@@ -144,6 +146,7 @@ export function addEntry(
     sqlite.prepare("UPDATE entries SET qty=qty+? WHERE id=?").run(qty, existing.id);
     return { id: existing.id, merged: true, finish, warning };
   }
+  ensureBaseline(sqlite, cardId, pricesDate(sqlite));
   const r = sqlite
     .prepare(
       `INSERT INTO entries(user_id,container_id,card_id,qty,finish,lang,condition,purchase_price,purchase_currency,
@@ -244,6 +247,8 @@ export function listEntries(sqlite: Database.Database, userId: number, o: EntryQ
     .get(...params) as { stacks: number; qty: number; value: number | null };
   return {
     ...agg,
+    currency: cur.toUpperCase(),
+    pricesAsOf: pricesDate(sqlite),
     page,
     pageSize,
     entries: rows.map((r) => ({
